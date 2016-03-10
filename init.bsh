@@ -1,0 +1,332 @@
+// Cement jAlbum Skin Rel. 1.3.5 (c) Pierre M. 2013-2015
+//
+// Executed when "Make Album" is clicked
+import java.io.File;
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import java.text.SimpleDateFormat;
+import se.datadosen.jalbum.CompiledScript.MMCQ;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import de.androidpit.colorthief.ColorThief;
+
+// Get skin name and version
+Properties skinProps = new Properties();
+skinProps.load(new FileInputStream(skinDirectory.getAbsolutePath() + "/skin.properties"));
+skinVersion = skinProps.getProperty("version");
+skinName = skinProps.getProperty("title");
+
+useInfiniteScroll = ((metafizzyTool == "masonry") && useInfiniteScroll) ? ((rows * cols) != 0) : false;
+
+// Add the fixed-shape filter if chosen in the user interface
+if(fixedShapeThumbs)
+	engine.addFilter(new FixedShapeFilter(), JAFilter.THUMBNAILS_POSTSCALE_STAGE);
+
+
+// convenient local variables
+overlaySize = (int)((maxThumbWidth > 0) ? Math.pow(2,Math.floor(Math.log(maxThumbWidth/4)/Math.log(2))) : 64);
+styleName = style.substring(0, style.indexOf("."));
+final int maxCementWidth = 3;	// may be more later like width/thumbSize?
+final String useMin = ".min";	// "" or ".min"
+int cementWidth = -1;
+
+//
+// Utility functions. Mainly text presentation beautifulers.
+//
+//
+// if cement_width parameter used, insure it is a valid int between 2 and maxCementWidth, otherwise, forced to 1.
+// store the value in trusted cementWidth local var for later use for this image.
+// run for all images  if exists=cement_width in template.
+public static int compute_cement_width() {
+	try {
+		cementWidth = Integer.parseInt(cement_width);
+	} catch (NumberFormatException e) {
+		cementWidth = 1;
+	}
+	cementWidth = (cementWidth < 1 ? 1 : ( cementWidth > maxCementWidth ? maxCementWidth : cementWidth));
+	return cementWidth;
+}
+
+public static String make_cement_widths() {
+	String add = "";
+	for(int i = 2; i <= 9; i++) { // <= maxCementWidth
+		add += (".w"+i+" {width: "+i*maxThumbWidth+"px; }\n");
+	}
+	return add;
+}
+
+public static String make_raindow_styles() {
+	String add = "";
+	for(int i = 0; i < 18; i++) {
+		add += (".color"+i+" {color:hsl("+ (i*20)+",90%,60%);}\n");
+		add += (".border-color"+i+" {border-color:hsl("+ (10+i*20)+",90%,60%);}\n");
+	}
+	return add;
+}
+
+// get_cement_thumbpath gets a larger thumbnail image and return its path.
+// If fail to create it, returns standard thumbnail path.
+// run for all images  if exists=cement_width in template.
+private static void debug(String s) {
+	System.out.println(s);
+}
+
+public static String get_cement_thumbpath() {
+	final int jpegQuality = 90;
+	final float diffThresholdPercent = 0.05;
+	final int diffThreshold = (int)(maxThumbWidth*diffThresholdPercent); // 10%
+	final int reqWidth  = thumbWidth*cementWidth;
+	final int reqHeight = thumbHeight*cementWidth;
+	File thumb      = new File(thumbPath);
+	String[] tokens = thumb.getName().split("\\.(?=[^\\.]+$)");
+	String newThumb = "";
+	File reqThumb   = new File(outputDirectory + File.separator + thumb.getParent(), tokens[0] + "-" + cementWidth + "." + tokens[1]);
+	
+	debug("get_cement_thumbpath: doing "+ closeupPath +"...");
+	if ( ! reqThumb.exists() ) {
+		debug("reqThumb does not exist");
+		BufferedImage bi;
+	 	try {
+		    File cp = currentObject.getFile();
+			if (cp !=null) {
+	 	   		bi = ImageIO.read(cp);
+			} else {
+	 			debug("get_cement_thumbpath: currentObject.getFile is null.");
+				return thumbPath;
+			}
+	 	} catch (IOException ex) {
+	 		debug("get_cement_thumbpath: Error in BufferedImage function when creating extra thumbnails: " + ex.toString());
+			return thumbPath;
+	 	}
+		if (bi == null || bi == void) {
+ 			debug("get_cement_thumbpath: BufferedImage is null.");
+			return thumbPath;
+		}
+		if (engine == null || engine == void) {
+ 			debug("get_cement_thumbpath: engine is null.");
+			return thumbPath;
+		}
+		try {
+			AlbumImage ai = new AlbumImage(bi, engine);
+			ai = ai.scaleToFit(new Dimension(reqWidth,reqHeight));
+			ai.saveImage(reqThumb, jpegQuality);
+		} catch(IOException ex) {
+			debug("get_cement_thumbpath: Error in AlbumImage function when creating extra thumbnails.1: " + ex.toString());
+			return thumbPath;
+		}
+	} else { // thumb file exists but is it the size we requested?
+		BufferedImage bi_existingThumb, bi_originalImage;
+		debug("reqThumb exists");
+	 	try {
+	 	   	bi_existingThumb = ImageIO.read(reqThumb);
+	 	} catch (IOException ex) {
+	 		debug("get_cement_thumbpath: ImageIO.read.1: "+ reqThumb.getPath() +": " + ex.toString());
+			return thumbPath;
+	 	}
+	    int height_diff = Math.abs(bi_existingThumb.getHeight() - reqHeight);
+		int width_diff  = Math.abs(bi_existingThumb.getWidth()  - reqWidth);
+		//debug("get_cement_thumbpath: Existing thumb "+ thumbPath +" is " + bi_existingThumb.getWidth() + "x" + bi_existingThumb.getHeight());
+		//debug("get_cement_thumbpath: Requested thumb "+ thumbPath +" is " + reqWidth + "x" + reqHeight);
+		//debug("get_cement_thumbpath: Delta size "+ thumbPath +" is " + width_diff + "x" + height_diff);
+	    if( (height_diff > diffThreshold) || (width_diff > diffThreshold) ) {
+			debug("get_cement_thumbpath: Existing thumb at least "+diffThresholdPercent+" out of scale. Recreating... ");
+		 	try {
+		 	   	bi_originalImage = ImageIO.read(currentObject.getFile());
+		 	} catch (IOException ex) {
+		 		debug("get_cement_thumbpath: ImageIO.read.2: "+ currentObject.getFile().getPath() +": " + ex.toString());
+				return thumbPath;
+		 	}
+			debug("get_cement_thumbpath: Original image "+ outputDirectory + File.separator + closeupPath +" is " + bi_originalImage.getWidth() + "x" + bi_originalImage.getHeight());
+			if ( (bi_originalImage.getWidth() > bi_existingThumb.getWidth()) && (bi_originalImage.getHeight() > bi_existingThumb.getHeight()) ) {
+				// sometimes, original image is smaller than requested thumb, so thumb can't be made larger...
+				//debug("get_cement_thumbpath: Orignal is larger than existing thumb, creating new thumb...");
+				try {
+					AlbumImage ai_originalImage = new AlbumImage(bi_originalImage, engine);
+					ai_originalImage = ai_originalImage.scaleToFit(new Dimension(reqWidth,reqHeight));
+					if (reqThumb.exists()) reqThumb.delete();
+					ai_originalImage.saveImage(reqThumb, jpegQuality);
+				} catch  (IOException ex) {
+					debug("get_cement_thumbpath: Error in AlbumImage function when creating extra thumbnails.2: " + ex.toString());
+					return thumbPath;
+				}
+			} else {
+				debug("get_cement_thumbpath: Original is smaller than requested thumb. No creation.");
+			}
+		} else {
+			debug("get_cement_thumbpath: Orignal has about requested size. No creation.");
+		}
+	}
+	newThumb = thumb.getParent() + File.separator + tokens[0] + "-" + cementWidth + "." + tokens[1];
+	//debug("get_cement_thumbpath: done "+ newThumb +".");
+	return newThumb;
+}
+
+// titleCase utility function
+public static String toTitleCase(String s) {
+	final String ACTIONABLE_DELIMITERS = " '-/"; // these cause the character following to be capitalized
+	StringBuilder sb = new StringBuilder();
+	boolean capNext = true;
+	for (char c : s.toCharArray()) {
+		c = (capNext) ? Character.toUpperCase(c) : Character.toLowerCase(c);
+		sb.append(c);
+		capNext = (ACTIONABLE_DELIMITERS.indexOf((int) c) >= 0); // explicit cast not needed
+	}
+	return sb.toString();
+}
+
+// beautifulCameraName generates exif camera model while trying to not replicate manufacturer's name if present in camera model name.
+public static String beautifulCameraName(String brand, String model) {
+	final int to_compare = 4;
+
+	int compare = to_compare;
+	if (model != null && model != void && model.length() > 0) { // we have a model
+		compare = (model.length() < compare) ? model.length() : compare;
+		if(brand != null && brand != void && brand.length() > 0) {// if we have a model and a brand, we compare the first few characters
+			compare = (brand.length() < compare) ? brand.length() : compare;
+			// so now compare is min(to_compare, brand.length(), model.length)
+			if((model.indexOf(brand) > -1) || brand.substring(0,compare).toLowerCase().equals(model.substring(0,compare).toLowerCase())) {
+				return model;
+			} else {
+				return toTitleCase(brand) + " " + model;
+			}
+		}
+		else // model, but no brand, so return model
+			return model;
+
+	} else { // no model?
+
+		if(brand != null && brand != void) // if brand, returns it.
+			return brand;
+		else
+			return "";
+
+	}
+	return ""; // should never reach
+}
+
+// beautifulExif generates exif data strings from what is available in image.
+public static String beautifulExif(String where) {
+	String exif = "";
+	String photograph = "";
+	if (meta!=void && meta!=null) {
+		if ((cameraMake!=void && cameraMake!=null) || (cameraModel!=void && cameraModel!=null))
+			exif += beautifulCameraName(cameraMake,cameraModel);
+		if (focalLength !=void && focalLength!=null && !focalLength.equals(""))
+			exif = exif + ", " + focalLength;
+		if (exposureTime !=void && exposureTime!=null && !exposureTime.equals(""))
+			exif = exif + ", " + exposureTime;
+		if (aperture !=void && aperture!=null && !aperture.equals(""))
+			exif = exif + " F&nbsp;" + aperture;
+		if (flash !=void && flash!=null && !flash.equals(""))
+			exif = exif + ", " + flash;
+	} else
+		exif += texts.getString("no_exif");
+	if (!exif.indexOf(exif.length()-1).equals(".") && (exif.length() > 0))
+		exif += ". ";
+		
+	if(exif.length() > 4 && showPhotographer && (photographerName.length() >0) && (photographerWebsite.length() >0)) // if we have some exif, we show it, optionally prefixed with the photograph's picture
+		exif = "<div class=\"" + where + "Photograph\" title=\""+photographerName+"\" onclick=\"window.location='"+photographerWebsite+"'\"></div> " + exif;
+
+	return "<span class=\"" + where + "Exif\">" + exif.replaceAll("'", "&apos;") + "</span>";
+}
+
+// imageDetailText concatenates image title, description, and exif data in span with classes.
+// appends . if necessary.
+public static String getRating() {
+	String ratingString = "";
+	if(rating > 0) for (int i = 0; i < rating; i++) ratingString += "★";
+	return ratingString;
+}
+
+public static String imageDetailText(String where) {
+	String imgtext = "";
+	String imglink = "";
+	String imgtitl = "";
+	String imgcmts = "";
+	String ratstr = "";
+	String escapedPath = "";
+	boolean hastitl = false;
+
+	if (title != void && title != null) {
+		var loc = title;
+		if ((loc.length() > 0) && !loc.indexOf(loc.length()-1).equals(".") && where.equals("image"))
+			loc += ". ";
+		imgtitl = "<span class=\"" + where + "Title\">" + loc.replaceAll("'", "&apos;") + "</span>";
+		hastitl = true;
+	}
+
+	if (comment != void && comment != null) {
+		var loc = comment;
+		if (loc == null || loc.equals(" ")) loc = "";
+		if(rating > 0 && addRatingToComments) {
+			for (int i = 0; i < rating; i++) ratstr += "★";
+			if ((loc.length() > 0) && !loc.indexOf(loc.length()-1).equals("."))
+				loc += ". ";
+			loc += (texts.getString("rating") + ": <span class=rating-stars>" + ratstr + "</span>.");
+		}	
+		imgcmts = "<span class=\"" + where + "Comment\">" + loc.replaceAll("'", "&apos;") + "</span>";
+	}
+
+	if (originalPath != void && originalPath != null) {
+		escapedPath = se.datadosen.util.IO.urlEncode(originalPath);
+		debug("Escaped: "+escapedPath);
+		imglink = "<span class=\"imageLinkPath\">"+  ( (hastitl && (where == "thumb") ) ? " - " : "") 
+					+ "<a href=\"" + escapedPath + "\" class=\"imageLink\" alt=\"" + texts.getString("imageLink").replaceAll("'", " ") + "\">"
+					+ texts.getString("imageLink").replaceAll("'", " ") + "</a></span>";
+	}
+
+	return (where == "image") ?
+		imgtitl	+ "\' data-cement-comments=\'" + imgcmts
+				+ "\' data-cement-exif=\'" + beautifulExif(where)
+				+ "\' data-cement-link=\'" + imglink
+							  :
+		imgtitl + imglink + imgcmts + beautifulExif(where);
+}
+
+String urlEncode(String s) {
+	if (engine.isUrlEncode()) {
+		try {
+			s = java.net.URLEncoder.encode(s, "UTF-8").replaceAll("\\+", "%20");
+		}
+		catch(java.io.UnsupportedEncodingException e) {
+			log("Encoding Error:", e);
+		}
+	} else {
+		// Security precaution to avoid broken strings in javascript
+		s = s.replaceAll("\\'", "\\\\'");
+	}
+	return s;
+}
+
+String getImageColor() {
+	String color = "rgba(255, 255, 255, 1.0)";
+	BufferedImage bi;
+	String fn = outputDirectory + File.separator + thumbPath;
+ 	try {
+		File cp = new File(fn);
+	/*	tries now to read from smaller thumbnail rather than whole image. Besides, works for video previews too! since they have a thumbnail!
+	    File cp = currentObject.getFile(); */
+		if (cp !=null) {
+ 	   		bi = ImageIO.read(cp);
+		} else {
+ 			debug("getImageColor: currentObject.getFile is null.");
+			return color;
+		}
+ 	} catch (IOException ex) {
+ 		debug("getImageColor: Error in gettin BufferedImage: " + fn + ex.toString());
+		return color;
+ 	}
+	int[] rgb = ColorThief.getColor(bi);
+	color = "rgba("+rgb[0]+", "+rgb[1]+", "+rgb[2]+", 1.0)";
+	debug("getImageColor: "+ fn + "=" + color);
+	return color;
+}

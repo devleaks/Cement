@@ -1,0 +1,276 @@
+/*
+ * Cement jAlbum Skin Rel. 1.3.5 (c) Pierre M. 2013-2015
+ * This script is run when a skin is selected.
+ * The script produces the user interface, and can be edited to add or change user interface options.
+ * Author David Ekholm, modified by Pierre M.
+ */
+ 
+import se.datadosen.component.*;
+import se.datadosen.jalbum.*;
+import se.datadosen.util.Item;
+import se.datadosen.util.*;
+import se.datadosen.jalbum.event.*;
+
+// Retrieve information from the skin.properties file
+
+SkinProperties skinProps = new SkinProperties(skinDirectory);
+String skinVersion = skinProps.getProperty(SkinProperties.VERSION);
+String skinAuthor = skinProps.getProperty(SkinProperties.AUTHOR);
+
+javax.swing.filechooser.FileFilter imageFiles = new javax.swing.filechooser.FileFilter() {
+	public boolean accept(File f) {
+		return f.isDirectory() || f.getName().toLowerCase().endsWith(".png") || f.getName().toLowerCase().endsWith(".jpg") || f.getName().toLowerCase().endsWith(".jpeg") || f.getName().toLowerCase().endsWith(".bmp");
+	}
+	public String getDescription() {
+		return "png, jpg, bmp files";				
+	}
+};
+
+
+// Controls that are to be imported into JAlbum as variables
+
+ControlPanel ui = new ControlPanel() {
+	
+	JCollapsiblePanel advanced = new JCollapsiblePanel(texts.getString("ui.advanced"), new RiverLayout());
+	JSpinner  layoutXSize   = new JSpinner(new SpinnerNumberModel(100, 20, 500, 20));
+	JSpinner  layoutYSize   = new JSpinner(new SpinnerNumberModel(100, 20, 500, 20));
+	JSpinner  rainbowTimer  = new JSpinner(new SpinnerNumberModel(5, 3, 20, 1));
+	JSpinner  contentWidth  = new JSpinner(new SpinnerNumberModel(80, 30, 100, 10));
+	JSpinner  thumbnailGutter  = new JSpinner(new SpinnerNumberModel(6, 0, 40, 2));
+
+	JComboBox isotopeLayout = new JComboBox(new Object[]{
+		new Item(texts.getString("isotopelayout.masonry"), "masonry"),
+		new Item(texts.getString("isotopelayout.fitRows"), "fitRows"),
+		new Item(texts.getString("isotopelayout.cellsByRow"), "cellsByRow"),
+		new Item(texts.getString("isotopelayout.masonryHorizontal"), "masonryHorizontal"),
+		new Item(texts.getString("isotopelayout.straightDown"), "straightDown"),
+		new Item(texts.getString("isotopelayout.fitColumns"), "fitColumns"),
+		new Item(texts.getString("isotopelayout.cellsByColumn"), "cellsByColumn"),
+		new Item(texts.getString("isotopelayout.straightAcross"), "straightAcross")
+	});
+
+	advanced.setExpanded(false);
+	advanced.add("br", new JLabelFor(texts.getString("ui.layoutXSize"), layoutXSize));
+	advanced.add("tab", layoutXSize);
+	advanced.add("br", new JLabelFor(texts.getString("ui.layoutYSize"), layoutYSize));
+	advanced.add("tab", layoutYSize);
+	advanced.add("br", new JLabelFor(texts.getString("ui.rainbowTimer"), rainbowTimer));
+	advanced.add("tab", rainbowTimer);
+	advanced.add("br", new JLabelFor(texts.getString("ui.contentWidth"), contentWidth));
+	advanced.add("tab", contentWidth);
+	advanced.add("br", new JLabelFor(texts.getString("ui.thumbnailGutter"), thumbnailGutter));
+	advanced.add("tab", thumbnailGutter);
+	advanced.add("br", new JLabelFor(texts.getString("ui.isotopeLayout"), isotopeLayout));
+	advanced.add("tab", isotopeLayout);
+
+
+	
+	ControlPanel settingsPanel = new ControlPanel() {
+		JCheckBox useDesign		      = new JCheckBox(texts.getString("ui.useDesign"), false);
+		JCheckBox showGalleryComments  = new JCheckBox(texts.getString("ui.showGalleryComments"), false);
+		JCheckBox useRainbowColor      = new JCheckBox(texts.getString("ui.useRainbowColor"), false);
+		JComboBox thumbTextContent     = new JComboBox(new Object[]{
+			new Item("none", texts.getString("ui.option.none")),
+			new Item("title", texts.getString("ui.option.title")),
+			new Item("comment", texts.getString("ui.option.comment")),
+			new Item("titleandcomment", texts.getString("ui.option.titleandcomment"))
+			});
+		JCheckBox thumbExif            = new JCheckBox(texts.getString("ui.thumbExif"), false);
+		JCheckBox useFolderOverlayIcon = new JCheckBox(texts.getString("ui.useFolderOverlayIcon"), true);
+		JCheckBox fixedShapeThumbs     = new JCheckBox(texts.getString("ui.fixedShapeThumbs"), false);
+		JCheckBox useImageRatingOverlayIcon = new JCheckBox(texts.getString("ui.useImageRatingOverlayIcon"), false);
+		JCheckBox addRatingToComments  = new JCheckBox(texts.getString("ui.addRatingToComments"), false);
+		JCheckBox showOptionsTab       = new JCheckBox(texts.getString("ui.showOptionsTab"), false);
+		JCheckBox useInfiniteScroll    = new JCheckBox(texts.getString("ui.useInfiniteScroll"), true);
+		JComboBox metafizzyTool        = new JComboBox(new Object[]{
+			new Item("masonry", "Masonry"),
+			new Item("isotope", "Isotope"),
+			new Item("packery", "Packery"),
+			new Item("playful", "Playful")
+			});
+		{
+			add("br", showGalleryComments);
+			add("br", new JLabelFor(texts.getString("ui.thumbTextContent"), thumbTextContent));
+			add("tab", thumbTextContent);
+			add("br", thumbExif);
+			add("br", useFolderOverlayIcon);
+			add("br", useImageRatingOverlayIcon);
+			add("br", addRatingToComments);
+			add("br", fixedShapeThumbs);
+			add("br", new JLabelFor(texts.getString("ui.metafizzyTool"), metafizzyTool));
+			add("tab", metafizzyTool);
+			add("br", showOptionsTab);
+			add("br", useRainbowColor);
+			add("br", useInfiniteScroll);
+			add("br", useDesign);
+			//add("br", advanced);
+		}
+        new StateMonitor() {
+            public void onChange() {	// when "playful" selected, other choices disabled.
+				enable( ((String)((Item)metafizzyTool.getSelectedItem()).value).equals("isotope"),
+					isotopeLayout
+				);
+				enable( ! ((String)((Item)metafizzyTool.getSelectedItem()).value).equals("playful"),
+					thumbTextContent,
+					thumbExif,
+					useFolderOverlayIcon,
+					useImageRatingOverlayIcon,
+					showOptionsTab
+				);
+				enable( ((String)((Item)metafizzyTool.getSelectedItem()).value).equals("masonry"),
+					useInfiniteScroll
+				);
+            }
+        }.add(metafizzyTool).done();
+        new StateMonitor() {
+            public void onChange() {	// when "playful" selected, other choices disabled.
+				enable( useRainbowColor.isSelected(),
+					rainbowTimer
+				);
+            }
+        }.add(useRainbowColor).done();
+	};
+	
+
+	ControlPanel fancyboxPanel = new ControlPanel() {
+		JCheckBox fancyShowThumbnails	= new JCheckBox(texts.getString("ui.fancyShowThumbnails"), true);
+		JComboBox fancyTitlePosition	= new JComboBox(new Object[]{
+			new Item("inside", texts.getString("ui.option.inside")),
+			new Item("none", texts.getString("ui.option.none")),
+			new Item("outside", texts.getString("ui.option.outside")),
+			new Item("over", texts.getString("ui.option.overlay"))
+			});
+		JComboBox fancyOpenCloseStyle	= new JComboBox(new Object[]{
+			new Item("elastic", texts.getString("ui.option.elastic")),
+			new Item("fade", texts.getString("ui.option.fade")),
+			new Item("none", texts.getString("ui.option.none"))
+			});
+		JComboBox fancyPrevNextStyle	= new JComboBox(new Object[]{
+			new Item("fade", texts.getString("ui.option.fade")),
+			new Item("elastic", texts.getString("ui.option.elastic")),
+			new Item("none", texts.getString("ui.option.none"))
+			});
+		JCheckBox showImageNumber		= new JCheckBox(texts.getString("ui.showImageNumber"), true);
+		JComboBox imageTextContent		= new JComboBox(new Object[]{
+			new Item("title", texts.getString("ui.option.title")),
+			new Item("comment", texts.getString("ui.option.comment")),
+			new Item("titleandcomment", texts.getString("ui.option.titleandcomment")),
+			new Item("none", texts.getString("ui.option.none"))
+			});
+		JCheckBox imageExif				= new JCheckBox(texts.getString("ui.imageExif"), false);
+		JCheckBox useAmbilight			= new JCheckBox(texts.getString("ui.useAmbilight"), true);
+		JCheckBox useVideoPlayer		= new JCheckBox(texts.getString("ui.useVideoPlayer"), true);
+		
+		{
+			add("br", new JLabelFor(texts.getString("ui.fancyOpenCloseStyle"), fancyOpenCloseStyle));
+			add("tab", fancyOpenCloseStyle);
+			add("br", new JLabelFor(texts.getString("ui.fancyPrevNextStyle"), fancyPrevNextStyle));
+			add("tab", fancyPrevNextStyle);
+			add("br", fancyShowThumbnails);
+			add("br", showImageNumber);
+			add("br", new JLabelFor(texts.getString("ui.imageTextContent"), imageTextContent));
+			add("tab", imageTextContent);
+			add("br", imageExif);
+			add("br", useAmbilight);
+			add("br", new JLabelFor(texts.getString("ui.fancyTitlePosition"), fancyTitlePosition));
+			add("tab", fancyTitlePosition);
+			add("br", useVideoPlayer);
+		}
+	};
+
+
+	ControlPanel aboutPanel = new ControlPanel() {
+		JLinkLabel developerCenter = new JLinkLabel("jAlbum Developer Center");
+		developerCenter.setURL("http://jalbum.net/developer");
+		JLinkLabel developer = new JLinkLabel("Pierre M");
+		developer.setURL("http://pierrem.jalbum.net/");
+		JLinkLabel developer2 = new JLinkLabel("Bastien Grasnick");
+		developer2.setURL("http://basgra.jalbum.net/");
+		JLinkLabel manual = new JLinkLabel("Help");
+		manual.setURL("http://ioracle.free.fr/cement.html");
+		JLinkLabel help = new JLinkLabel("Support");
+		help.setURL("http://jAlbum.net/forum/forum.jspa?forumID=11");
+		JLinkLabel masonry = new JLinkLabel("About Masonry, Isotope, and Packery...");
+		masonry.setURL("http://metafizzy.co/");
+		JLinkLabel fancybox = new JLinkLabel("About Fancybox...");
+		fancybox.setURL("http://fancyapps.com/fancybox/");
+		JLinkLabel flowplayer = new JLinkLabel("About Flowplayer...");
+		flowplayer.setURL("http://flowplayer.org/");
+		JLinkLabel infscroll = new JLinkLabel("About Infinite Scroll...");
+		infscroll.setURL("http://www.infinite-scroll.com/");
+
+		JCheckBox  showPhotographer    = new JCheckBox(texts.getString("ui.showPhotographer"), true);
+		JTextField photographerName    = new JSmartTextField("", 40);
+		JTextField photographerWebsite = new JSmartTextField("", 50);
+		JTextField photographerPic     = new JSmartTextField("", 40);						
+
+		JButton photographerButton = new JButton(texts.getString("ui.photographerPic"));
+		photographerButton.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				JFileChooser fc = new JFileChooser();
+				String url = photographerPic.getText();
+				if (url.startsWith("file:")) {
+					URL realURL = new URL(url);
+					fc.setSelectedFile(new File(URLDecoder.decode(realURL.getFile(), "UTF-8")));
+				}
+				fc.setFileFilter(imageFiles);
+				int res = fc.showOpenDialog(window);
+				if (res == JFileChooser.APPROVE_OPTION) {
+					String fn = fc.getSelectedFile().toString();
+					if ( !fn.trim().equals("") ) {
+						File src = new File(fn);
+						File dst = new File(engine.getDirectory(), "res");
+						if (!dst.exists()) {
+							dst.mkdir();
+						}
+						if (src.exists() &&  dst.exists()) {
+							try {
+								IO.copyFile(src, dst);
+								photographerPic.setText( src.getName() );
+							} catch (IOException e) {
+								System.out.println(e);
+							}
+						}
+					}
+				}
+			}
+		});
+
+		add("center", new JLabel(skin + " Skin Rel. " + skinVersion + " © 2013 and beyond by"));
+		add(developer);
+		add(new JLabel("&"));
+		add(developer2);
+		add("br", manual);
+		add("br", help);
+		add("br", developerCenter);
+		add("br", masonry);
+		add("br", fancybox);
+		add("br", flowplayer);
+		add("br", infscroll);
+
+		add("left p", showPhotographer);
+		add("br", new JLabelFor(texts.getString("ui.photographerName"), photographerName));
+		add("br", photographerName);
+		add("br", photographerPic);
+		add(photographerButton);
+		add("br", new JLabelFor(texts.getString("ui.photographerWebsite"), photographerWebsite));
+		add("br", photographerWebsite);
+	};
+
+
+	JTabbedPane tabs = new JTabbedPane() {
+		add(settingsPanel, texts.getString("ui.settings"));
+		add(fancyboxPanel, texts.getString("ui.fancybox"));
+		add(aboutPanel,    texts.getString("ui.about"));
+	};
+	
+	
+	// ui:
+	{
+		add("hfill vfill", tabs);
+	}
+};
+
+// Install components into jAlbum
+
+window.setSkinUI(ui);
