@@ -39,3 +39,10 @@ Hence its name.
 Now go take picture.
 
  
+
+[Cement Skin Page](<http://jalbum.net/fr/skins/skin/Cement>) and
+[Manual](<http://ioracle.free.fr/cement/index.html>)
+
+ 
+
+Last updated on 18-feb-'15
